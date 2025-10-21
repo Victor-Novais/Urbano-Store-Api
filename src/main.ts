@@ -14,6 +14,7 @@ async function bootstrap() {
             'http://localhost:5173',
             'https://urbano-gestao-visual.vercel.app', // ✅ sem barra
             'https://urbano-store-api.onrender.com',
+            'https://urbano-store.netlify.app/',
         ],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],

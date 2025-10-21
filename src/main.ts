@@ -8,7 +8,13 @@ async function bootstrap() {
 
     // Habilitar CORS
     app.enableCors({
-        origin: ['http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173'],
+        origin: [
+            'http://localhost:8080',
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'https://urbano-gestao-visual.vercel.app/', // ✅ Exemplo: seu site hospedado
+            'https://urbano-store-api.onrender.com', // ✅ Para permitir chamadas internas
+        ],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
@@ -24,11 +30,11 @@ async function bootstrap() {
     );
 
     const port = process.env.PORT || 3000;
-    await app.listen(port);
-    // eslint-disable-next-line no-console
-    console.log(`Server running on http://localhost:${port}`);
+
+    // ✅ Use '0.0.0.0' no Render
+    await app.listen(port, '0.0.0.0');
+
+    console.log(`✅ Server running on port ${port}`);
 }
 
 bootstrap();
-
-

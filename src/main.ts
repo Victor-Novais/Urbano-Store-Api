@@ -12,8 +12,8 @@ async function bootstrap() {
             'http://localhost:8080',
             'http://localhost:3000',
             'http://localhost:5173',
-            'https://urbano-gestao-visual.vercel.app/', // ✅ Exemplo: seu site hospedado
-            'https://urbano-store-api.onrender.com', // ✅ Para permitir chamadas internas
+            'https://urbano-gestao-visual.vercel.app/',
+            'https://urbano-store-api.onrender.com',
         ],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],

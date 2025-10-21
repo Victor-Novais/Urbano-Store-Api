@@ -12,14 +12,13 @@ async function bootstrap() {
             'http://localhost:8080',
             'http://localhost:3000',
             'http://localhost:5173',
-            'https://urbano-gestao-visual.vercel.app/',
+            'https://urbano-gestao-visual.vercel.app', // ✅ sem barra
             'https://urbano-store-api.onrender.com',
         ],
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
     });
-
     app.useGlobalPipes(
         new ValidationPipe({
             whitelist: true,

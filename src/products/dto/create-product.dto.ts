@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, IsUrl } from 'class-validator';
 
 export class CreateProductDto {
     @IsString()
@@ -22,10 +22,15 @@ export class CreateProductDto {
     @Min(0)
     quantity!: number;
 
-    // image is stored as bytea; accept base64 string
+    // Support both base64 (legacy) and URL (new Supabase Storage)
     @IsString()
     @IsOptional()
     imageBase64?: string;
+
+    @IsString()
+    @IsOptional()
+    @IsUrl()
+    imageUrl?: string;
 }
 
 

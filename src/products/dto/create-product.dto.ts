@@ -18,6 +18,11 @@ export class CreateProductDto {
     @Min(0)
     cost!: number;
 
+    // NOVO CAMPO: Preço de Venda no Atacado
+    @IsNumber()
+    @Min(0)
+    price_wholesale!: number;
+
     @IsInt()
     @Min(0)
     quantity!: number;

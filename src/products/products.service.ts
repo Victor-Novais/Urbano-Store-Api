@@ -10,6 +10,7 @@ export interface Product {
     name: string;
     description: string | null;
     price_sale: number;
+    price_wholesale: number; // Adicionar este campo
     cost: number;
     quantity: number;
     image_url: string | null; // URL da imagem (Supabase Storage ou base64)
@@ -26,6 +27,7 @@ export class ProductsService {
             name: dto.name,
             description: dto.description,
             price_sale: dto.price_sale,
+            price_wholesale: dto.price_wholesale,
             cost: dto.cost,
             quantity: dto.quantity,
             hasImageBase64: !!dto.imageBase64,
@@ -189,6 +191,7 @@ export class ProductsService {
             name: row.name,
             description: row.description,
             price_sale: Number(row.price_sale),
+            price_wholesale: Number(row.price_wholesale),
             cost: Number(row.cost),
             quantity: Number(row.quantity),
 

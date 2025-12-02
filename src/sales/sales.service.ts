@@ -9,6 +9,7 @@ export interface Sale {
     id: string;
     total_price: number;
     payment_method: string;
+    sale_type: 'retail' | 'wholesale';
     created_at: string;
 }
 
@@ -34,6 +35,7 @@ export class SalesService {
         const salePayload = {
             total_price: dto.total_price,
             payment_method: dto.payment_method,
+            sale_type: dto.sale_type,
             created_at: dto.created_at ?? undefined,
         } as const;
         const { data: saleRow, error: saleErr } = await client.from('sales').insert(salePayload).select('*').single();
@@ -134,6 +136,7 @@ export class SalesService {
             id: row.id,
             total_price: Number(row.total_price),
             payment_method: row.payment_method,
+            sale_type: row.sale_type,
             created_at: row.created_at,
         };
     }

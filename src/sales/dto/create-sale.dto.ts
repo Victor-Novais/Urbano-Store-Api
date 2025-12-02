@@ -24,6 +24,10 @@ export class CreateSaleDto {
     @IsIn(['cash', 'credit', 'debit', 'pix', 'other'])
     payment_method!: string;
 
+    @IsString()
+    @IsIn(['retail', 'wholesale']) // 'varejo' ou 'atacado'
+    sale_type!: 'retail' | 'wholesale';
+
     @IsArray()
     @ArrayMinSize(1)
     @ValidateNested({ each: true })

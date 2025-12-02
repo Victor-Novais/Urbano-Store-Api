@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateSaleDto, CreateSaleItemDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -9,6 +10,7 @@ export interface Sale {
     id: string;
     total_price: number;
     payment_method: string;
+    sale_type: 'retail' | 'wholesale';
     created_at: string;
 }
 
@@ -30,10 +32,15 @@ export class SalesService {
 
     async create(dto: CreateSaleDto): Promise<SaleWithItems> {
         const client = this.supabase.getClient();
+
+        // CRÍTICO: Validar preços dos itens antes de criar a venda
+        await this.validateSaleItemsPrices(dto.items, dto.sale_type, client);
+
         // Insert sale
         const salePayload = {
             total_price: dto.total_price,
             payment_method: dto.payment_method,
+            sale_type: dto.sale_type,
             created_at: dto.created_at ?? undefined,
         } as const;
         const { data: saleRow, error: saleErr } = await client.from('sales').insert(salePayload).select('*').single();
@@ -54,6 +61,68 @@ export class SalesService {
             ...this.mapSale(sale),
             items: items.map((r) => this.mapItem(r)),
         };
+    }
+
+    /**
+     * Valida se os preços dos itens correspondem aos preços cadastrados do produto
+     * baseado no tipo de venda (retail ou wholesale).
+     * 
+     * @param items - Array de itens da venda
+     * @param saleType - Tipo de venda: 'retail' ou 'wholesale'
+     * @param client - Cliente Supabase
+     * @throws BadRequestException se algum preço não corresponder
+     */
+    private async validateSaleItemsPrices(
+        items: CreateSaleItemDto[],
+        saleType: 'retail' | 'wholesale',
+        client: SupabaseClient
+    ): Promise<void> {
+        // Buscar todos os produtos de uma vez para otimizar
+        const productIds = items.map(item => item.product_id);
+        const { data: productsData, error: productsError } = await client
+            .from('products')
+            .select('id, name, price_sale, price_wholesale')
+            .in('id', productIds);
+
+        if (productsError) {
+            throw new BadRequestException(`Erro ao buscar produtos: ${productsError.message}`);
+        }
+
+        const products = handleSupabase<any[]>(productsData, productsError);
+        const productsMap = new Map(products.map(p => [p.id, p]));
+
+        // Validar cada item
+        for (const item of items) {
+            const product = productsMap.get(item.product_id);
+
+            if (!product) {
+                throw new BadRequestException(
+                    `Produto com ID ${item.product_id} não encontrado`
+                );
+            }
+
+            // Determinar qual preço usar baseado no tipo de venda
+            const expectedPrice = saleType === 'retail'
+                ? Number(product.price_sale)
+                : Number(product.price_wholesale);
+
+            const receivedPrice = Number(item.price_sale);
+
+            // Comparar com tolerância para evitar problemas de ponto flutuante
+            const priceDifference = Math.abs(expectedPrice - receivedPrice);
+            const tolerance = 0.01; // 1 centavo de tolerância
+
+            if (priceDifference > tolerance) {
+                const saleTypeLabel = saleType === 'retail' ? 'varejo' : 'atacado';
+                const expectedPriceLabel = saleType === 'retail' ? 'price_sale' : 'price_wholesale';
+
+                throw new BadRequestException(
+                    `Preço inválido para o produto "${product.name}" (ID: ${item.product_id}). ` +
+                    `Para venda ${saleTypeLabel}, o preço esperado é R$ ${expectedPrice.toFixed(2)} ` +
+                    `(${expectedPriceLabel}), mas foi recebido R$ ${receivedPrice.toFixed(2)}.`
+                );
+            }
+        }
     }
 
     async findPage(query: CursorQuery & { month?: number; year?: number }): Promise<CursorPage<Sale>> {
@@ -134,6 +203,7 @@ export class SalesService {
             id: row.id,
             total_price: Number(row.total_price),
             payment_method: row.payment_method,
+            sale_type: row.sale_type,
             created_at: row.created_at,
         };
     }

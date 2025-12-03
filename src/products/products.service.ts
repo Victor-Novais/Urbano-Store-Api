@@ -119,14 +119,45 @@ export class ProductsService {
 
     async update(id: string, dto: UpdateProductDto): Promise<Product> {
         const client = this.supabase.getClient();
-        const payload: any = { ...dto };
-        const imageBase64 = (dto as any).imageBase64 as string | undefined;
-        if (imageBase64 !== undefined) {
-            // Send base64 string directly for bytea columns
-            payload.image = imageBase64 ?? null;
-            delete payload.imageBase64;
+
+        // Determinar qual campo de imagem usar (mesma lógica do create)
+        let imageValue: string | null | undefined = undefined;
+        if ((dto as any).imageUrl !== undefined || (dto as any).imageBase64 !== undefined) {
+            const imageUrl = (dto as any).imageUrl as string | undefined;
+            const imageBase64 = (dto as any).imageBase64 as string | undefined;
+
+            if (imageUrl) {
+                imageValue = imageUrl;
+                console.log('🔄 Update product: usando imageUrl', imageUrl);
+            } else if (imageBase64) {
+                imageValue = imageBase64;
+                console.log('🔄 Update product: usando imageBase64 (legacy), size:', imageBase64.length);
+            } else {
+                // Se enviado vazio, significa remover imagem
+                imageValue = null;
+                console.log('🔄 Update product: removendo imagem');
+            }
         }
-        const { data, error } = await client.from('products').update(payload).eq('id', id).select('*').single();
+
+        // Montar payload apenas com campos definidos
+        const payload: any = {};
+        if (dto.name !== undefined) payload.name = dto.name;
+        if (dto.description !== undefined) payload.description = dto.description ?? null;
+        if (dto.price_sale !== undefined) payload.price_sale = dto.price_sale;
+        if (dto.price_wholesale !== undefined) payload.price_wholesale = dto.price_wholesale;
+        if (dto.cost !== undefined) payload.cost = dto.cost;
+        if (dto.quantity !== undefined) payload.quantity = dto.quantity;
+        if (imageValue !== undefined) payload.image_url = imageValue;
+
+        console.log('🔄 Update product payload:', payload);
+
+        const { data, error } = await client
+            .from('products')
+            .update(payload)
+            .eq('id', id)
+            .select('*')
+            .single();
+
         const row = handleSupabaseSingle<any>(data, error, 'Product not updated');
         return this.mapRow(row);
     }

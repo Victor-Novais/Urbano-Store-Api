@@ -20,6 +20,11 @@ export class CreateSaleDto {
     @Min(0)
     total_price!: number;
 
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    discount?: number;
+
     @IsString()
     @IsIn(['cash', 'credit', 'debit', 'pix', 'other'])
     payment_method!: string;

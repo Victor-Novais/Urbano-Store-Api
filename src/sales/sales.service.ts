@@ -9,6 +9,7 @@ import { handleSupabase, handleSupabaseSingle } from '../common/supabase-error.u
 export interface Sale {
     id: string;
     total_price: number;
+    discount: number;
     payment_method: string;
     sale_type: 'retail' | 'wholesale';
     created_at: string;
@@ -36,9 +37,35 @@ export class SalesService {
         // CRÍTICO: Validar preços dos itens antes de criar a venda
         await this.validateSaleItemsPrices(dto.items, dto.sale_type, client);
 
+        // 1. Calcular o Subtotal: somando o preço de venda de cada item multiplicado pela quantidade
+        const subtotal = dto.items.reduce((sum, item) => {
+            return sum + (Number(item.price_sale) * Number(item.quantity));
+        }, 0);
+
+        // 2. Validação do Desconto: verificar se o discount não é maior que o subtotal
+        const discount = dto.discount ?? 0;
+        if (discount > subtotal) {
+            throw new BadRequestException(
+                `O desconto de R$ ${discount.toFixed(2)} não pode ser maior que o subtotal de R$ ${subtotal.toFixed(2)}.`
+            );
+        }
+
+        // 3. Validação do Preço Total: verificar se o total_price enviado é igual a subtotal - discount
+        const expectedTotalPrice = subtotal - discount;
+        const tolerance = 0.01; // 1 centavo de tolerância para evitar problemas de ponto flutuante
+        const priceDifference = Math.abs(Number(dto.total_price) - expectedTotalPrice);
+
+        if (priceDifference > tolerance) {
+            throw new BadRequestException(
+                `O preço total informado (R$ ${Number(dto.total_price).toFixed(2)}) não corresponde ao cálculo esperado. ` +
+                `Subtotal: R$ ${subtotal.toFixed(2)} - Desconto: R$ ${discount.toFixed(2)} = R$ ${expectedTotalPrice.toFixed(2)}.`
+            );
+        }
+
         // Insert sale
         const salePayload = {
             total_price: dto.total_price,
+            discount: discount,
             payment_method: dto.payment_method,
             sale_type: dto.sale_type,
             created_at: dto.created_at ?? undefined,
@@ -202,6 +229,7 @@ export class SalesService {
         return {
             id: row.id,
             total_price: Number(row.total_price),
+            discount: Number(row.discount ?? 0),
             payment_method: row.payment_method,
             sale_type: row.sale_type,
             created_at: row.created_at,

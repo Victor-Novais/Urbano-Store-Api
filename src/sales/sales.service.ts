@@ -13,6 +13,7 @@ export interface Sale {
     payment_method: string;
     sale_type: 'retail' | 'wholesale';
     created_at: string;
+    notes?: string;
 }
 
 export interface SaleWithItems extends Sale {
@@ -69,6 +70,7 @@ export class SalesService {
             payment_method: dto.payment_method,
             sale_type: dto.sale_type,
             created_at: dto.created_at ?? undefined,
+            notes: dto.notes ?? undefined,
         } as const;
         const { data: saleRow, error: saleErr } = await client.from('sales').insert(salePayload).select('*').single();
         const sale = handleSupabaseSingle<any>(saleRow, saleErr, 'Sale not created');
@@ -233,6 +235,7 @@ export class SalesService {
             payment_method: row.payment_method,
             sale_type: row.sale_type,
             created_at: row.created_at,
+            notes: row.notes,
         };
     }
 

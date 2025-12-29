@@ -42,6 +42,10 @@ export class CreateSaleDto {
     @IsOptional()
     @IsString()
     created_at?: string; // allow overriding for imports
+
+    @IsOptional()
+    @IsString()
+    notes?: string | null;
 }
 
 export type CreateSaleItemDto = CreateSaleItemInput;

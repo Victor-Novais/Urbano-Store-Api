@@ -1,5 +1,5 @@
 import { ArrayMinSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 class CreateSaleItemInput {
     @IsString()
@@ -45,6 +45,7 @@ export class CreateSaleDto {
 
     @IsOptional()
     @IsString()
+    @Transform(({ value }) => value === '' ? null : value)
     notes?: string | null;
 }
 

@@ -1,5 +1,5 @@
 import { ArrayMinSize, IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 
 class CreateSaleItemInput {
     @IsString()
@@ -42,11 +42,6 @@ export class CreateSaleDto {
     @IsOptional()
     @IsString()
     created_at?: string; // allow overriding for imports
-
-    @IsOptional()
-    @IsString()
-    @Transform(({ value }) => value === '' ? null : value)
-    notes?: string | null;
 }
 
 export type CreateSaleItemDto = CreateSaleItemInput;

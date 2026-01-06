@@ -117,8 +117,103 @@ export class ProductsService {
         return this.mapRow(row);
     }
 
+    async getProductStats(id: string): Promise<{
+        product_id: string;
+        total_purchased: number;
+        total_invested: number;
+        total_sold: number;
+        total_revenue: number;
+        cost_of_sold_items: number;
+        gross_profit: number;
+        profit_margin: number;
+    }> {
+        const client = this.supabase.getClient();
+
+        // Verificar se o produto existe
+        const product = await this.findOne(id);
+
+        // Buscar todas as compras (purchases) para este produto
+        const { data: purchases, error: purchasesError } = await client
+            .from('purchases')
+            .select('quantity, unit_cost')
+            .eq('product_id', id);
+
+        handleSupabase(purchases, purchasesError);
+
+        // Calcular totais de compras
+        let total_purchased = 0;
+        let total_invested = 0;
+        let total_quantity_for_avg = 0;
+        let total_cost_for_avg = 0;
+
+        if (purchases && purchases.length > 0) {
+            purchases.forEach((purchase: any) => {
+                const qty = Number(purchase.quantity);
+                const cost = Number(purchase.unit_cost);
+                total_purchased += qty;
+                total_invested += qty * cost;
+                total_quantity_for_avg += qty;
+                total_cost_for_avg += qty * cost;
+            });
+        }
+
+        // Calcular custo médio ponderado
+        const average_cost = total_quantity_for_avg > 0 
+            ? total_cost_for_avg / total_quantity_for_avg 
+            : product.cost; // Fallback para o custo atual do produto
+
+        // Buscar todas as vendas (sale_items) para este produto
+        const { data: saleItems, error: saleItemsError } = await client
+            .from('sale_items')
+            .select('quantity, price_sale')
+            .eq('product_id', id);
+
+        handleSupabase(saleItems, saleItemsError);
+
+        // Calcular totais de vendas
+        let total_sold = 0;
+        let total_revenue = 0;
+
+        if (saleItems && saleItems.length > 0) {
+            saleItems.forEach((item: any) => {
+                const qty = Number(item.quantity);
+                const price = Number(item.price_sale);
+                total_sold += qty;
+                total_revenue += qty * price;
+            });
+        }
+
+        // Calcular custo dos itens vendidos (usando custo médio ponderado)
+        const cost_of_sold_items = total_sold * average_cost;
+
+        // Calcular Lucro Bruto
+        const gross_profit = total_revenue - cost_of_sold_items;
+
+        // Calcular Margem de Lucro (em percentual)
+        const profit_margin = total_revenue > 0 
+            ? (gross_profit / total_revenue) * 100 
+            : 0;
+
+        return {
+            product_id: id,
+            total_purchased,
+            total_invested,
+            total_sold,
+            total_revenue,
+            cost_of_sold_items,
+            gross_profit,
+            profit_margin: Number(profit_margin.toFixed(2)), // Arredondar para 2 casas decimais
+        };
+    }
+
     async update(id: string, dto: UpdateProductDto): Promise<Product> {
         const client = this.supabase.getClient();
+
+        // Buscar produto atual para comparar quantidade
+        const currentProduct = await this.findOne(id);
+        const oldQuantity = currentProduct.quantity;
+        const newQuantity = dto.quantity !== undefined ? dto.quantity : oldQuantity;
+        const quantityIncrease = newQuantity > oldQuantity;
 
         // Determinar qual campo de imagem usar (mesma lógica do create)
         let imageValue: string | null | undefined = undefined;
@@ -159,7 +254,33 @@ export class ProductsService {
             .single();
 
         const row = handleSupabaseSingle<any>(data, error, 'Product not updated');
-        return this.mapRow(row);
+        const updatedProduct = this.mapRow(row);
+
+        // Se a quantidade aumentou, criar registro em purchases
+        if (quantityIncrease) {
+            const restockQuantity = newQuantity - oldQuantity;
+            const unitCost = dto.cost !== undefined ? dto.cost : currentProduct.cost;
+
+            console.log(`📦 Criando purchase automático: ${restockQuantity} unidades a R$ ${unitCost} cada`);
+
+            const { error: purchaseError } = await client
+                .from('purchases')
+                .insert({
+                    product_id: id,
+                    quantity: restockQuantity,
+                    unit_cost: unitCost,
+                });
+
+            if (purchaseError) {
+                console.error('❌ Erro ao criar purchase automático:', purchaseError);
+                // Não lançar erro aqui para não quebrar o update do produto
+                // Mas logar para debug
+            } else {
+                console.log('✅ Purchase automático criado com sucesso');
+            }
+        }
+
+        return updatedProduct;
     }
 
     async remove(id: string): Promise<{ success: true }> {

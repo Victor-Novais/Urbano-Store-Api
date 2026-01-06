@@ -22,6 +22,11 @@ export class ProductsController {
         return this.productsService.findPage({ limit, cursor, orderBy, order });
     }
 
+    @Get(':id/stats')
+    getStats(@Param('id') id: string) {
+        return this.productsService.getProductStats(id);
+    }
+
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.productsService.findOne(id);

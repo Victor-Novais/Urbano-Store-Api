@@ -13,7 +13,6 @@ export interface Sale {
     payment_method: string;
     sale_type: 'retail' | 'wholesale';
     created_at: string;
-    notes?: string;
 }
 
 export interface SaleWithItems extends Sale {
@@ -70,7 +69,6 @@ export class SalesService {
             payment_method: dto.payment_method,
             sale_type: dto.sale_type,
             created_at: dto.created_at ?? undefined,
-            notes: dto.notes ?? undefined,
         } as const;
         const { data: saleRow, error: saleErr } = await client.from('sales').insert(salePayload).select('*').single();
         const sale = handleSupabaseSingle<any>(saleRow, saleErr, 'Sale not created');
@@ -210,262 +208,20 @@ export class SalesService {
 
     async update(id: string, dto: UpdateSaleDto): Promise<Sale> {
         const client = this.supabase.getClient();
-        
-        // Limpar o ID antes de usar
-        const cleanId = id.trim();
-        
-        console.log('🔄 [UPDATE] Tentando atualizar venda ID:', cleanId);
-        console.log('📦 [UPDATE] Payload recebido:', dto);
-
-        // Construir payload apenas com os campos da tabela 'sales' que foram fornecidos
-        // Campos atualizáveis: total_price, payment_method, discount, notes, sale_type
-        const payload: any = {};
-        
-        if (dto.total_price !== undefined) {
-            // Converter para Number antes de enviar ao banco
-            payload.total_price = Number(dto.total_price);
-            console.log('💰 [UPDATE] total_price convertido para Number:', payload.total_price);
-        }
-        
-        if (dto.discount !== undefined) {
-            // Converter para Number antes de enviar ao banco
-            payload.discount = Number(dto.discount);
-            console.log('💸 [UPDATE] discount convertido para Number:', payload.discount);
-        }
-        
-        if (dto.payment_method !== undefined) {
-            payload.payment_method = dto.payment_method;
-        }
-        
-        if (dto.notes !== undefined) {
-            // Permitir null para limpar observações
-            payload.notes = dto.notes === null || dto.notes === '' ? null : dto.notes;
-        }
-        
-        if (dto.sale_type !== undefined) {
-            payload.sale_type = dto.sale_type;
-        }
-        
-        // Não permitir atualizar created_at via update
-        // Não atualizar sale_items neste método - apenas campos da tabela sales
-
-        // Se não há nada para atualizar, buscar e retornar a venda atual
-        if (Object.keys(payload).length === 0) {
-            console.log('⚠️ [UPDATE] Nenhum campo para atualizar, buscando venda atual...');
-            const { data: existingSale, error: findError } = await client
-                .from('sales')
-                .select('*')
-                .eq('id', cleanId)
-                .single();
-            
-            if (findError || !existingSale) {
-                console.error('❌ [UPDATE] Venda não encontrada:', findError);
-                throw new BadRequestException('Venda não encontrada');
-            }
-            
-            console.log('✅ [UPDATE] Venda encontrada, retornando sem alterações');
-            return this.mapSale(existingSale);
-        }
-
-        console.log('📝 [UPDATE] Payload final para atualização:', payload);
-
-        // Tentar atualizar com .select() simples primeiro
-        const { data: updateData, error: updateError } = await client
-            .from('sales')
-            .update(payload)
-            .eq('id', cleanId)
-            .select();
-        
-        console.log('🔍 [UPDATE] Resultado do update:', { 
-            dataLength: updateData?.length || 0,
-            hasData: !!updateData && updateData.length > 0,
-            error: updateError ? {
-                message: updateError.message,
-                code: updateError.code,
-                details: updateError.details,
-                hint: updateError.hint
-            } : null
-        });
-
-        // Se houver erro do Supabase, logar detalhadamente e lançar exceção
-        if (updateError) {
-            console.error('❌ [UPDATE] Erro detalhado do Supabase:', {
-                message: updateError.message,
-                code: updateError.code,
-                details: updateError.details,
-                hint: updateError.hint,
-                error: JSON.stringify(updateError, null, 2)
-            });
-            throw new BadRequestException(`Erro ao atualizar venda: ${updateError.message}${updateError.hint ? ` - ${updateError.hint}` : ''}`);
-        }
-
-        // Verificar se o retorno do update é um array vazio
-        if (!updateData || updateData.length === 0) {
-            console.error('❌ [UPDATE] Update retornou array vazio (0 rows affected)');
-            console.error('🔍 [UPDATE] Possíveis causas:');
-            console.error('   - RLS (Row Level Security) bloqueando a atualização');
-            console.error('   - ID não encontrado no banco');
-            console.error('   - Constraints ou triggers bloqueando');
-            console.error('   - Permissões insuficientes');
-            
-            // Tentar buscar a venda para verificar se existe
-            const { data: fetchedSale, error: fetchError } = await client
-                .from('sales')
-                .select('*')
-                .eq('id', cleanId)
-                .single();
-            
-            console.log('🔍 [UPDATE] Verificação de existência da venda:', {
-                exists: !!fetchedSale,
-                error: fetchError ? {
-                    message: fetchError.message,
-                    code: fetchError.code
-                } : null
-            });
-            
-            throw new BadRequestException(
-                'O banco de dados não permitiu a alteração. Verifique o RLS no Supabase.'
-            );
-        }
-
-        console.log('✅ [UPDATE] Atualização concluída com sucesso');
-        return this.mapSale(updateData[0]);
+        const payload: any = { ...dto };
+        delete payload.items; // items not updated here
+        const { data, error } = await client.from('sales').update(payload).eq('id', id).select('*').single();
+        const row = handleSupabaseSingle<any>(data, error, 'Sale not updated');
+        return this.mapSale(row);
     }
 
     async remove(id: string): Promise<{ success: true }> {
         const client = this.supabase.getClient();
-        
-        console.log('🗑️ [DELETE] Iniciando deleção da venda ID:', id);
-        console.log('🔍 [DELETE] Tipo do ID:', typeof id);
-        
-        // Validar se o ID é uma string UUID válida (formato básico)
-        if (!id || typeof id !== 'string' || id.trim().length === 0) {
-            console.error('❌ [DELETE] ID inválido');
-            throw new BadRequestException('ID inválido');
-        }
-
-        // ETAPA 1: Buscar os itens da venda (sale_items) vinculados a este sale_id
-        console.log('📋 [DELETE] ETAPA 1: Buscando itens da venda...');
-        const { data: saleItems, error: fetchItemsError } = await client
-            .from('sale_items')
-            .select('*')
-            .eq('sale_id', id);
-        
-        console.log('🔍 [DELETE] Resultado da busca de itens:', {
-            itemsCount: saleItems?.length || 0,
-            error: fetchItemsError ? {
-                message: fetchItemsError.message,
-                code: fetchItemsError.code,
-                details: fetchItemsError.details
-            } : null
-        });
-
-        if (fetchItemsError) {
-            console.error('❌ [DELETE] Erro ao buscar itens da venda:', fetchItemsError);
-            throw new BadRequestException(`Erro ao buscar itens da venda: ${fetchItemsError.message}`);
-        }
-
-        // ETAPA 2: Para cada item encontrado, devolver o estoque ao produto
-        if (saleItems && saleItems.length > 0) {
-            console.log(`📦 [DELETE] ETAPA 2: Devolvendo estoque de ${saleItems.length} item(ns)...`);
-            
-            for (const item of saleItems) {
-                const productId = item.product_id;
-                const itemQuantity = Number(item.quantity);
-                
-                console.log(`🔄 [DELETE] Devolvendo ${itemQuantity} unidade(s) ao produto ${productId}...`);
-                
-                // Buscar o produto atual para obter a quantidade atual
-                const { data: product, error: productError } = await client
-                    .from('products')
-                    .select('id, quantity')
-                    .eq('id', productId)
-                    .single();
-                
-                if (productError) {
-                    console.error(`❌ [DELETE] Erro ao buscar produto ${productId}:`, productError);
-                    // Continuar mesmo se houver erro ao buscar produto (pode não existir mais)
-                    continue;
-                }
-                
-                if (!product) {
-                    console.warn(`⚠️ [DELETE] Produto ${productId} não encontrado, pulando devolução de estoque`);
-                    continue;
-                }
-                
-                const currentQuantity = Number(product.quantity) || 0;
-                const newQuantity = currentQuantity + itemQuantity;
-                
-                console.log(`📊 [DELETE] Produto ${productId}: ${currentQuantity} → ${newQuantity} unidades`);
-                
-                // Atualizar a quantidade do produto
-                const { error: updateProductError } = await client
-                    .from('products')
-                    .update({ quantity: newQuantity })
-                    .eq('id', productId);
-                
-                if (updateProductError) {
-                    console.error(`❌ [DELETE] Erro ao atualizar estoque do produto ${productId}:`, updateProductError);
-                    throw new BadRequestException(
-                        `Erro ao devolver estoque do produto ${productId}: ${updateProductError.message}`
-                    );
-                }
-                
-                console.log(`✅ [DELETE] Estoque do produto ${productId} devolvido com sucesso`);
-            }
-            
-            console.log('✅ [DELETE] ETAPA 2 concluída: Estoque devolvido para todos os produtos');
-        } else {
-            console.log('ℹ️ [DELETE] Nenhum item encontrado para devolver estoque');
-        }
-
-        // ETAPA 3: Deletar todos os registros em sale_items onde sale_id = id
-        console.log('🗑️ [DELETE] ETAPA 3: Deletando itens da venda (sale_items)...');
-        const { error: delItemsError } = await client
-            .from('sale_items')
-            .delete()
-            .eq('sale_id', id);
-        
-        console.log('🔍 [DELETE] Resultado da deleção de itens:', {
-            success: !delItemsError,
-            error: delItemsError ? {
-                message: delItemsError.message,
-                code: delItemsError.code,
-                details: delItemsError.details
-            } : null
-        });
-        
-        if (delItemsError) {
-            console.error('❌ [DELETE] Erro ao deletar itens da venda:', delItemsError);
-            throw new BadRequestException(`Erro ao deletar itens da venda: ${delItemsError.message}`);
-        }
-
-        console.log('✅ [DELETE] ETAPA 3 concluída: Itens deletados com sucesso');
-
-        // ETAPA 4: Deletar o registro na tabela sales
-        console.log('🗑️ [DELETE] ETAPA 4: Deletando registro da venda (sales)...');
-        const { error: delSaleError } = await client
-            .from('sales')
-            .delete()
-            .eq('id', id);
-        
-        console.log('🔍 [DELETE] Resultado da deleção da venda:', {
-            success: !delSaleError,
-            error: delSaleError ? {
-                message: delSaleError.message,
-                code: delSaleError.code,
-                details: delSaleError.details
-            } : null
-        });
-        
-        if (delSaleError) {
-            console.error('❌ [DELETE] Erro ao deletar venda:', delSaleError);
-            throw new BadRequestException(`Erro ao deletar venda: ${delSaleError.message}`);
-        }
-
-        console.log('✅ [DELETE] ETAPA 4 concluída: Venda deletada com sucesso');
-        console.log('✅ [DELETE] Operação de deleção completa - todas as etapas foram bem-sucedidas');
-
+        // delete items first due to FK constraints if ON DELETE RESTRICT
+        const delItems = await client.from('sale_items').delete().eq('sale_id', id);
+        handleSupabase(null, delItems.error);
+        const delSale = await client.from('sales').delete().eq('id', id);
+        handleSupabase(null, delSale.error);
         return { success: true };
     }
 
@@ -477,7 +233,6 @@ export class SalesService {
             payment_method: row.payment_method,
             sale_type: row.sale_type,
             created_at: row.created_at,
-            notes: row.notes,
         };
     }
 
